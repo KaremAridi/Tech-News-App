@@ -2,10 +2,15 @@ package com.assignment.technews;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Intent;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.widget.Adapter;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -26,7 +31,11 @@ import java.util.concurrent.ExecutionException;
 
 public class MainActivity extends AppCompatActivity {
     ArrayList<String> articleIDs = new ArrayList<>();
+    ArrayList<String> articleTitles = new ArrayList<>();
     ListView myListView;
+    public static String articleTitle;
+    public static String articleUrl;
+    int idIndex, titleIndex, urlIndex;
 
     public class DownloadTask extends AsyncTask<String, Void, String> {
 
@@ -53,6 +62,20 @@ public class MainActivity extends AppCompatActivity {
                 return null;
             }
         }
+
+        @Override
+        protected void onPostExecute(String s) {
+            super.onPostExecute(s);
+
+            try {
+                JSONObject json = new JSONObject(s);
+                articleTitle = json.getString("title");
+                articleUrl = json.getString("url");
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
     }
 
 
@@ -61,14 +84,36 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        myListView = (ListView) findViewById(R.id.newsView);
+
+        //Initialize DB
+        SQLiteDatabase database = this.openOrCreateDatabase("articlesDB", MODE_PRIVATE, null);
         DownloadTask task = new DownloadTask();
 
         try {
             String res = task.execute("https://hacker-news.firebaseio.com/v0/topstories.json").get();
             String[] temp = res.split(",");
-            for (int i=0;i<20;i++){
-                articleIDs.add(temp[i+1]);
+            for (int i = 0; i < 20; i++) {
+                articleIDs.add(temp[i + 1]);
             }
+
+            //SQL Part
+
+            //Creating DB
+            database.execSQL("CREATE TABLE IF NOT EXISTS articles (id VARCHAR,title VARCHAR, url VARCHAR)");
+
+            //Inserting to DB
+            for (int i = 0; i < 20; i++) {
+                DownloadTask task2 = new DownloadTask();
+
+                String articleID = articleIDs.get(i);
+
+                //Fetching Data
+                task2.execute("https://hacker-news.firebaseio.com/v0/item/" + articleID + ".json?print=pretty");
+                articleTitles.add(articleTitle);
+                database.execSQL("INSERT INTO articles(id,title,url) VALUES (articleID,articleTitle,articleUrl)");
+            }
+
         } catch (ExecutionException e) {
             e.printStackTrace();
         } catch (InterruptedException e) {
@@ -76,11 +121,31 @@ public class MainActivity extends AppCompatActivity {
         }
 
 
+//        Log.i("Size of Array Articles", String.valueOf(articleIDs.size()));
 
-        myListView = (ListView) findViewById(R.id.newsView);
-        Log.i("Size of Array Articles", String.valueOf(articleIDs.size()));
-
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, articleIDs);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, articleTitles);
         myListView.setAdapter(adapter);
+
+        //Creating cursor to choose
+        Cursor c = database.rawQuery("SELECT * FROM articles", null);
+        idIndex = c.getColumnIndex("id");
+        titleIndex = c.getColumnIndex("title");
+        urlIndex = c.getColumnIndex("url");
+        c.moveToFirst();
+
+        //on click
+        myListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                c.moveToPosition(position);
+                String articleTitletemp = c.getString(titleIndex);
+                String articleUrltemp = c.getString(urlIndex);
+
+                Intent intent = new Intent(MainActivity.this, MainActivity2.class);
+                intent.putExtra("title", articleTitletemp);
+                intent.putExtra("url", articleUrltemp);
+                MainActivity.this.startActivity(intent);
+            }
+        });
     }
 }
