@@ -1,2 +1,4 @@
 # Tech-News-App
-Tech News Android App
+Fetching APIs storing them in SQLLiteDatabase then calling it onto Android App
+<br>
+Enjoy the Video Preview!
